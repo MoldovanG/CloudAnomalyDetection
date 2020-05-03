@@ -5,6 +5,7 @@ from os import path
 import cv2
 import numpy as np
 import pickle
+import json
 from gluoncv import model_zoo, data
 import tensorflow as tf
 from tensorflow.python.keras.backend import set_session
@@ -226,6 +227,7 @@ class FramePredictor:
         self.autoencoder_gradients = AutoEncoderModel("gradient_autoencoder",self.s3_client)
         self.num_clusters = 10
         self.svm_models = self.__load_models()
+        self.threshold = 2.5
 
     def __load_models(self):
         models = []
@@ -237,21 +239,18 @@ class FramePredictor:
             models.append(model)
         return models
 
-
     def get_inference_score(self,feature_vector):
         scores = [model.decision_function([feature_vector])[0] for model in self.svm_models]
         return max(scores)
 
-
-
 def load_frame(frame_name, s3_client):
     frame_path = path.join("/tmp/",frame_name)
-    print('Asta e MARELE FRAME',frame_name, " UITA TE BAAAAAA AICI ")
+    print("Loading frame with name : ", frame_name)
     result = s3_client.download_file("moldovan.inferenceframes", frame_name, frame_path)
     s3 = boto3.resource('s3')
     s3.Object("moldovan.inferenceframes", frame_name).delete()
     # Read the frame
-    frame = mx.nd.load(frame_path)
+    frame = mx.nd.load(frame_path)[0]
     return frame
 
 
@@ -261,7 +260,7 @@ def prepare_data_for_CNN( array):
         transformed.append(array[i] / 255)
     return np.array(transformed)
 
-def get_feature_vectors(frame_predictor,frame,frame_d3,frame_p3):
+def get_feature_vectors_and_bounding_boxes(frame_predictor,frame,frame_d3,frame_p3):
     object_detector = ObjectDetector(frame)
     cropped_detections, cropped_d3, cropped_p3 = object_detector.get_detections_and_cropped_sections(frame_d3, frame_p3)
     gradient_calculator = GradientCalculator()
@@ -279,7 +278,7 @@ def get_feature_vectors(frame_predictor,frame,frame_d3,frame_p3):
         feature_vector = np.concatenate((motion_features_d3.flatten(), apperance_features.flatten(),
                                          motion_features_p3.flatten()))
         list_of_feature_vectors.append(feature_vector)
-    return np.array(list_of_feature_vectors)
+    return np.array(list_of_feature_vectors), object_detector.bounding_boxes
 
 s3_client = boto3.client("s3")
 frame_predictor = FramePredictor(s3_client)
@@ -296,15 +295,28 @@ def lambda_handler():
     frame = load_frame(frame_name,s3_client)
     frame_d3 = load_frame(frame_name+"_d3", s3_client)
     frame_p3 = load_frame(frame_name+"_p3", s3_client)
-    feature_vectors = get_feature_vectors(frame_predictor,frame,frame_d3,frame_p3)
+    feature_vectors, bounding_boxes = get_feature_vectors_and_bounding_boxes(frame_predictor,frame,frame_d3,frame_p3)
     frame_score = 0
+    boxes = []
+    x, img = data.transforms.presets.ssd.transform_test(frame, short=512)
+    ratio1 = img.shape[0]/frame.shape[0]
+    ratio2 = img.shape[1]/frame.shape[1]
+
     for idx, vector in enumerate(feature_vectors):
         score = frame_predictor.get_inference_score(vector)
+        if score > frame_predictor.threshold:
+            c1,l1,c2,l2 = bounding_boxes[idx]
+            c1 = int(c1/ratio2)-1
+            c2 = int(c2/ratio2)-1
+            l1 = int(l1/ratio1)-1
+            l2 = int(l2/ratio2)-1
+            boxes.append([c1,l1,c2,l2])
         if  score > frame_score:
             frame_score = score
     response = {"statusCode": 200,
-            "body" : frame_score}
-    return jsonify(response)
+            "body" : frame_score,
+            "boxes" : boxes}
+    return Response(json.dumps(response),  mimetype='application/json')
     
 @app.route('/')
 def hello_world():
@@ -315,4 +327,4 @@ def hello_world():
 if __name__ == "__main__":
     # Setting debug to True enables debug output. This line should be
     # removed before deploying a production app.
-    app.run(host='0.0.0.0', debug = False)
+    app.run(host='0.0.0.0', debug = True)
