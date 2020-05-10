@@ -285,13 +285,11 @@ frame_predictor = FramePredictor(s3_client)
 # EB looks for an 'app' callable by default.
 app = Flask(__name__)
 
-@app.route('/upload', methods=['POST'])
-def lambda_handler():
+@app.route('/upload/<file_key>', methods=['POST'])
+def lambda_handler(file_key):
     
     # Write request body data into file
-    r = request
-    print(r.json)
-    frame_name = str(r.json['key'])
+    frame_name = file_key
     frame = load_frame(frame_name,s3_client)
     frame_d3 = load_frame(frame_name+"_d3", s3_client)
     frame_p3 = load_frame(frame_name+"_p3", s3_client)
