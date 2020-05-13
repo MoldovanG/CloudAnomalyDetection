@@ -12,6 +12,7 @@ from tensorflow.python.keras.backend import set_session
 from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D
 from keras.models import Model
 from keras.optimizers import Adam
+from multiprocessing.pool import ThreadPool
 import boto3
 
 class AutoEncoderModel:
@@ -243,7 +244,9 @@ class FramePredictor:
         scores = [model.decision_function([feature_vector])[0] for model in self.svm_models]
         return max(scores)
 
-def load_frame(frame_name, s3_client):
+def load_frame(arg):
+    frame_name = arg[0] 
+    s3_client = arg[1]
     frame_path = path.join("/tmp/",frame_name)
     print("Loading frame with name : ", frame_name)
     result = s3_client.download_file("moldovan.inferenceframes", frame_name, frame_path)
@@ -290,9 +293,13 @@ def lambda_handler(file_key):
     
     # Write request body data into file
     frame_name = file_key
-    frame = load_frame(frame_name,s3_client)
-    frame_d3 = load_frame(frame_name+"_d3", s3_client)
-    frame_p3 = load_frame(frame_name+"_p3", s3_client)
+    arguments_tuples = [(frame_name,s3_client),(frame_name+"_d3", s3_client),(frame_name+"_p3", s3_client)]
+    pool = ThreadPool(processes=4)
+    results = pool.map(load_frame, arguments_tuples)
+    frame = results[0]
+    frame_d3 = results[1]
+    frame_p3 = results[2]
+
     feature_vectors, bounding_boxes = get_feature_vectors_and_bounding_boxes(frame_predictor,frame,frame_d3,frame_p3)
     frame_score = 0
     boxes = []
@@ -325,4 +332,4 @@ def hello_world():
 if __name__ == "__main__":
     # Setting debug to True enables debug output. This line should be
     # removed before deploying a production app.
-    app.run(host='0.0.0.0', debug = True)
+    app.run(host='0.0.0.0', debug = False)
