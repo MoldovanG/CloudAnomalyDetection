@@ -3,6 +3,7 @@ import mxnet as mx
 from os import path
 
 import cv2
+import time
 import numpy as np
 import pickle
 import json
@@ -95,13 +96,12 @@ class ObjectDetector:
     net : pretrained-model from gluoncv, using ssd architecture trained on the coco dataset.
     threshold : int - the threshold for the detections to be considered positive.
     """
-
+    net = model_zoo.get_model('ssd_512_mobilenet1.0_coco', pretrained=True, root='/tmp/')
     def __init__(self,image):
-        self.net = model_zoo.get_model('ssd_512_mobilenet1.0_coco', pretrained=True, root='/tmp/')
         self.image = image
         self.threshold = 0.5
         self.x_transformed_image, self.img_transformed_image = data.transforms.presets.ssd.transform_test(image, short=512)
-        self.class_IDs, self.scores, self.bounding_boxes = self.net(self.x_transformed_image)
+        self.class_IDs, self.scores, self.bounding_boxes = ObjectDetector.net(self.x_transformed_image)
         self.bounding_boxes,self.scores,self.class_IDs = self.__clean_bounding_boxes_and_scores(self.bounding_boxes[0].asnumpy(), self.scores[0].asnumpy(),self.class_IDs[0].asnumpy())
 
     def get_bounding_box_coordinates(self, bounding_boxes, index):
@@ -248,7 +248,7 @@ def load_frame(arg):
     frame_name = arg[0] 
     s3_client = arg[1]
     frame_path = path.join("/tmp/",frame_name)
-    print("Loading frame with name : ", frame_name)
+    # print("Loading frame with name : ", frame_name)
     result = s3_client.download_file("moldovan.inferenceframes", frame_name, frame_path)
     s3 = boto3.resource('s3')
     s3.Object("moldovan.inferenceframes", frame_name).delete()
@@ -264,8 +264,11 @@ def prepare_data_for_CNN( array):
     return np.array(transformed)
 
 def get_feature_vectors_and_bounding_boxes(frame_predictor,frame,frame_d3,frame_p3):
+    start_time = time.time()
     object_detector = ObjectDetector(frame)
     cropped_detections, cropped_d3, cropped_p3 = object_detector.get_detections_and_cropped_sections(frame_d3, frame_p3)
+    end_time = time.time()
+    print("Running object detection took %f seconds" % (end_time-start_time))
     gradient_calculator = GradientCalculator()
     gradients_d3 = prepare_data_for_CNN(gradient_calculator.calculate_gradient_bulk(cropped_d3))
     gradients_p3 = prepare_data_for_CNN(gradient_calculator.calculate_gradient_bulk(cropped_p3))
