@@ -59,7 +59,7 @@ class AutoEncoderModel:
     def __load_autoencoder(self,name):
         """Method used for loading the weights from the S3 bucket"""
         # set_session(sess)
-        result = self.s3_client.download_file("moldovan.anomalydetectionmodels", name + ".hdf5", "/tmp/"+name + ".hdf5")
+        result = self.s3_client.download_file("moldovan.newanomalymodels", name + ".hdf5", "/tmp/"+name + ".hdf5")
         self.autoencoder.load_weights("/tmp/"+name+".hdf5")
         self.autoencoder._make_predict_function()
         self.encoder._make_predict_function()
@@ -184,22 +184,19 @@ class FramePredictor:
         self.autoencoder_images = AutoEncoderModel("image_autoencoder",self.s3_client)
         self.autoencoder_gradients = AutoEncoderModel("gradient_autoencoder",self.s3_client)
         self.num_clusters = 10
-        self.svm_models = self.__load_models()
-        self.threshold = 2.5
+        self.svm_model = self.__load_model()
+        self.threshold = 0
 
-    def __load_models(self):
-        models = []
+    def __load_model(self):
+        file_name = "model.sav"
 
-        for cluster in range(self.num_clusters):
-            file_name = str(cluster)+".sav"
-            result = self.s3_client.download_file("moldovan.anomalydetectionmodels", file_name, path.join("/tmp/",file_name))
-            model = pickle.load(open(path.join("/tmp/",file_name), 'rb'))
-            models.append(model)
-        return models
+        result = self.s3_client.download_file("moldovan.newanomalymodels", file_name, path.join("/tmp/",file_name))
+        model = pickle.load(open(path.join("/tmp/",file_name),'rb'))
+        return model
 
     def get_inference_score(self,feature_vector):
-        scores = [model.decision_function([feature_vector])[0] for model in self.svm_models]
-        return max(scores)
+        scores = self.svm_model.decision_function([feature_vector])[0]
+        return -max(scores)
 
 def load_frame(arg):
     frame_name = arg[0] 
