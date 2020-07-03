@@ -99,7 +99,7 @@ class ObjectDetector:
     """
     def __init__(self,image):
         self.image = image
-        self.threshold = 0.65
+        self.threshold = 0.25
         print('Detecting on image with shape : ', image.shape)
         print(type(image))
         self.bounding_boxes, self.class_IDs, self.scores= cv.detect_common_objects(image,confidence = self.threshold, model = 'yolov3-tiny')
@@ -161,9 +161,9 @@ class GradientCalculator:
 
     def calculate_gradient(self,image):
         # Get x-gradient in "sx"
-        sx = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=5)
+        sx = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=3)
         # Get y-gradient in "sy"
-        sy = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=5)
+        sy = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=3)
         # Get square root of sum of squares
         sobel = np.hypot(sx, sy)
         sobel = sobel.astype(np.float32)
@@ -282,4 +282,4 @@ def hello_world():
 if __name__ == "__main__":
     # Setting debug to True enables debug output. This line should be
     # removed before deploying a production app.
-    app.run(host='0.0.0.0', debug = True)
+    app.run(host='0.0.0.0', debug = False)
