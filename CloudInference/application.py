@@ -243,7 +243,7 @@ def get_feature_vectors_and_bounding_boxes(frame_predictor,frame,frame_d3,frame_
 s3_client = boto3.client("s3")
 frame_predictor = FramePredictor(s3_client)
 # EB looks for an 'app' callable by default.
-app = Flask(__name__)
+application = app = Flask(__name__)
 
 @app.route('/upload/<file_key>', methods=['POST'])
 def lambda_handler(file_key):
