@@ -258,18 +258,16 @@ def lambda_handler(file_key):
     frame_d3 = results[1]
     frame_p3 = results[2]
     feature_vectors, bounding_boxes = get_feature_vectors_and_bounding_boxes(frame_predictor,frame,frame_d3,frame_p3)
-    frame_score = 0
     boxes = []
-
+    scores = []
     for idx, vector in enumerate(feature_vectors):
         score = frame_predictor.get_inference_score(vector)
         if score > frame_predictor.threshold:
             c1,l1,c2,l2 = bounding_boxes[idx]
             boxes.append([c1,l1,c2,l2])
-        if  score > frame_score:
-            frame_score = score
+            scores.append(score)
     response = {"statusCode": 200,
-            "body" : frame_score,
+            "scores" : scores,
             "boxes" : boxes}
     return Response(json.dumps(response),  mimetype='application/json')
     
